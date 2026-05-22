@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
-import 'agora_broadcaster_screen.dart';
+
+import 'package:rc_camera_server/core/theme/app_theme.dart';
+import 'package:rc_camera_server/features/broadcaster/presentation/pages/broadcaster_page.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const AdminBattlebotApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+/// Root application widget for Admin Battlebot.
+class AdminBattlebotApp extends StatelessWidget {
+  const AdminBattlebotApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Admin Battlebot',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
-        useMaterial3: true,
-      ),
-      home: const AgoraBroadcasterScreen(),
+      theme: AppTheme.darkTheme,
+      home: const BroadcasterPage(),
       debugShowCheckedModeBanner: false,
     );
   }
