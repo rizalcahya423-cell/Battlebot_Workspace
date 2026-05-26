@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:my_flutter_app/core/constants/app_colors.dart';
 import 'package:my_flutter_app/core/constants/app_sizes.dart';
@@ -11,7 +12,6 @@ import 'package:my_flutter_app/features/profile/presentation/widgets/profile_cus
 /// Top bar widget for lobby screen.
 /// Displays user profile, app title, and realtime status indicators.
 class LobbyTopBar extends StatelessWidget {
-  final int gems;
   final int batteryLevel;
   final IconData batteryIcon;
   final Color batteryColor;
@@ -22,7 +22,6 @@ class LobbyTopBar extends StatelessWidget {
 
   const LobbyTopBar({
     super.key,
-    required this.gems,
     required this.batteryLevel,
     required this.batteryIcon,
     required this.batteryColor,
@@ -44,17 +43,26 @@ class LobbyTopBar extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _ProfileChip(
-                onLongPress: () => _showLogoutDialog(context),
-              ),
+            // Layer 1: Aligned exactly with Center Arena
+            const Row(
+              children: [
+                SizedBox(width: AppSizes.sidebarWidth),
+                Expanded(
+                  child: Center(
+                    child: _AppTitle(),
+                  ),
+                ),
+                SizedBox(width: AppSizes.leaderboardWidth),
+              ],
             ),
-            const Align(alignment: Alignment.center, child: _AppTitle()),
+            // Layer 2: Left Profile chip & Right status indicators
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: _ProfileChip(),
+            ),
             Align(
               alignment: Alignment.centerRight,
               child: _StatusIndicators(
-                gems: gems,
                 signalIcon: signalIcon,
                 signalColor: signalColor,
                 pingMs: pingMs,
@@ -68,80 +76,73 @@ class LobbyTopBar extends StatelessWidget {
       ),
     );
   }
-
-  void _showLogoutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSizes.spacingXl),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        title: const Text(
-          'Keluar',
-          style: TextStyle(color: AppColors.accentBlue),
-        ),
-        content: const Text(
-          'Apakah Anda ingin keluar?',
-          style: TextStyle(color: Colors.white54),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal', style: TextStyle(color: Colors.white38)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.dangerRed,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-              ),
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-              Provider.of<AuthProvider>(context, listen: false).signOut();
-            },
-            child: const Text('Keluar'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _ProfileChip extends StatelessWidget {
-  final VoidCallback onLongPress;
-  const _ProfileChip({required this.onLongPress});
+  const _ProfileChip();
 
   @override
   Widget build(BuildContext context) {
     final profile = context.watch<ProfileProvider>();
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
 
-    return GestureDetector(
-      onTap: () => ProfileCustomizationDialog.show(context),
-      onLongPress: onLongPress,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GameProfileAvatar(
-            avatarAsset: profile.avatarAsset,
-            frameAsset: profile.frameAsset,
-            size: 56,
+    if (user == null) return const SizedBox();
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      builder: (context, snapshot) {
+        String username = 'LOADING...';
+        String playerId = 'CB-00000';
+        String avatarAsset = profile.avatarAsset;
+
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>?;
+          if (data != null) {
+            username = data['username'] ?? 'USER';
+            playerId = data['playerId'] ?? 'CB-00000';
+            avatarAsset = data['avatarAsset'] ?? profile.avatarAsset;
+          }
+        }
+
+        return GestureDetector(
+          onTap: () => ProfileCustomizationDialog.show(context),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GameProfileAvatar(
+                avatarAsset: avatarAsset,
+                size: 56,
+              ),
+              const SizedBox(width: AppSizes.spacingMd),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    username.toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: AppSizes.fontLg,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    playerId,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: AppSizes.fontSm,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(width: AppSizes.spacingMd),
-          const Text(
-            'USER_01',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: AppSizes.fontLg,
-              letterSpacing: 1,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -151,47 +152,11 @@ class _AppTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'CRASHBOT',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: AppSizes.fontTitle,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 6,
-            shadows: [
-              Shadow(
-                color: AppColors.primaryBlue.withValues(alpha: 0.8),
-                blurRadius: 12,
-              ),
-            ],
-          ),
-        ),
-        Text(
-          'INDONESIA',
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: AppSizes.fontMd,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 8,
-            shadows: [
-              Shadow(
-                color: AppColors.primaryBlue.withValues(alpha: 0.5),
-                blurRadius: 8,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    return const SizedBox();
   }
 }
 
 class _StatusIndicators extends StatelessWidget {
-  final int gems;
   final IconData signalIcon;
   final Color signalColor;
   final int pingMs;
@@ -200,7 +165,6 @@ class _StatusIndicators extends StatelessWidget {
   final String batteryText;
 
   const _StatusIndicators({
-    required this.gems,
     required this.signalIcon,
     required this.signalColor,
     required this.pingMs,
@@ -214,12 +178,10 @@ class _StatusIndicators extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _GemsDisplay(gems: gems),
-        const SizedBox(width: 6),
-        _AddButton(),
-        const SizedBox(width: 10),
+        const _GemsDisplay(),
+        const SizedBox(width: 12),
         _SignalDisplay(icon: signalIcon, color: signalColor, pingMs: pingMs),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         _BatteryDisplay(
           icon: batteryIcon,
           color: batteryColor,
@@ -231,27 +193,53 @@ class _StatusIndicators extends StatelessWidget {
 }
 
 class _GemsDisplay extends StatelessWidget {
+  const _GemsDisplay();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
+
+    if (user == null) return const _GemsContainer(gems: 0);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      builder: (context, snapshot) {
+        int gems = 0;
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>?;
+          if (data != null) {
+            gems = data['gems'] ?? 0;
+          }
+        }
+        return _GemsContainer(gems: gems);
+      },
+    );
+  }
+}
+
+class _GemsContainer extends StatelessWidget {
   final int gems;
-  const _GemsDisplay({required this.gems});
+  const _GemsContainer({required this.gems});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSizes.spacingMd,
-        vertical: AppSizes.spacingSm,
-      ),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(AppSizes.radiusXl),
-        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.4)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.diamond,
-            color: AppColors.accentBlue,
-            size: AppSizes.iconMd,
+          const SizedBox(width: AppSizes.spacingMd),
+          // Aset ikon berlian 3D cyberpunk kustom
+          Image.asset(
+            'assets/diamond_icon.png',
+            width: 22,
+            height: 22,
+            fit: BoxFit.contain,
           ),
           const SizedBox(width: AppSizes.spacingSm),
           Text(
@@ -262,29 +250,28 @@ class _GemsDisplay extends StatelessWidget {
               fontSize: AppSizes.fontLg,
             ),
           ),
+          const SizedBox(width: 8),
+          // Pembatas vertikal tipis
+          Container(
+            height: 14,
+            width: 1,
+            color: AppColors.accentBlue.withValues(alpha: 0.3),
+          ),
+          // Tombol + terintegrasi (berwarna biru neon kustom)
+          GestureDetector(
+            onTap: () {
+              // Aksi saat tombol + ditekan
+            },
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
+              child: const Icon(
+                Icons.add,
+                color: AppColors.accentBlue,
+                size: AppSizes.iconSm,
+              ),
+            ),
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class _AddButton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: AppColors.darkGreen.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: AppColors.batteryGreen.withValues(alpha: 0.5),
-        ),
-      ),
-      child: const Icon(
-        Icons.add,
-        color: AppColors.batteryGreen,
-        size: AppSizes.iconSm,
       ),
     );
   }

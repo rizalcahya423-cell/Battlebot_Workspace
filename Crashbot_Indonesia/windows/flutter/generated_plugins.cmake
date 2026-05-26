@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   agora_rtc_engine
   battery_plus
+  cloud_firestore
   connectivity_plus
   firebase_auth
   firebase_core

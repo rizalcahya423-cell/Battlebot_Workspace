@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:my_flutter_app/core/constants/app_colors.dart';
@@ -6,7 +7,6 @@ import 'package:my_flutter_app/core/constants/app_sizes.dart';
 import 'package:my_flutter_app/features/auth/presentation/providers/auth_provider.dart';
 
 /// Login page with email/password authentication.
-/// Auto sign-up is attempted if sign-in fails with user-not-found.
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -15,29 +15,61 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isSignUpMode = false; // Mode toggle: false = Login, true = Register
+
+  @override
+  void initState() {
+    super.initState();
+    // Hilangkan status bar baterai, jam, dll. dan navigasi bawah untuk mode Fullscreen
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    if (_isSignUpMode && _usernameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Username tidak boleh kosong'),
+          backgroundColor: AppColors.dangerRed,
+        ),
+      );
+      return;
+    }
+
+    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email dan password tidak boleh kosong'),
+          backgroundColor: AppColors.dangerRed,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     final auth = Provider.of<AuthProvider>(context, listen: false);
 
-    String? error = await auth.signIn(
-      _emailController.text,
-      _passwordController.text,
-    );
-
-    if (error != null && error.contains('user-not-found')) {
+    String? error;
+    if (_isSignUpMode) {
       error = await auth.signUp(
-        _emailController.text,
+        _emailController.text.trim(),
+        _passwordController.text,
+        _usernameController.text.trim(),
+      );
+    } else {
+      error = await auth.signIn(
+        _emailController.text.trim(),
         _passwordController.text,
       );
     }
@@ -53,46 +85,106 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1E1E1E), Colors.black],
-          ),
+      backgroundColor: Colors.white,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSizes.spacingXl,
+          20, // Jarak atas logo dibuat sesedikit mungkin sesuai permintaan
+          AppSizes.spacingXl,
+          AppSizes.spacingXxxl,
         ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSizes.spacingXxxl),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.settings_remote,
-                  size: AppSizes.iconHero,
-                  color: AppColors.cyanAccent,
-                ),
-                const SizedBox(height: AppSizes.spacingXxl),
-                const Text(
-                  'RC LOGIN',
-                  style: TextStyle(
-                    fontSize: AppSizes.fontHeading,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 4,
-                    color: Colors.white,
+                Container(
+                  height: 70, // Batasi tinggi blok sedikit lebih kecil
+                  alignment: Alignment.center,
+                  child: OverflowBox(
+                    minHeight: 0,
+                    maxHeight: 120,
+                    child: Image.asset(
+                      'assets/fontlogo.png',
+                      height: 100, // Lebih kecil sedikit saja (100px)
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 10), // Jarak ditambah sedikit saja agar pas dan ideal
+                if (_isSignUpMode) ...[
+                  _UsernameField(controller: _usernameController),
+                  const SizedBox(height: AppSizes.spacingXl),
+                ],
                 _EmailField(controller: _emailController),
                 const SizedBox(height: AppSizes.spacingXl),
                 _PasswordField(controller: _passwordController),
-                const SizedBox(height: AppSizes.spacingXxxl),
-                _SubmitButton(isLoading: _isLoading, onPressed: _submit),
+                const SizedBox(height: AppSizes.spacingXl), // Spasi lebih rapat
+                _SubmitButton(
+                  isLoading: _isLoading,
+                  isSignUp: _isSignUpMode,
+                  onPressed: _submit,
+                ),
+                const SizedBox(height: AppSizes.spacingLg),
+                // Toggle antara Login dan Register
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _isSignUpMode ? 'Sudah punya akun? ' : 'Belum punya akun? ',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _isSignUpMode = !_isSignUpMode),
+                      child: Text(
+                        _isSignUpMode ? 'Login di sini' : 'Daftar di sini',
+                        style: const TextStyle(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSizes.spacingXl),
+                _GoogleSignInButton(
+                  isLoading: _isLoading,
+                  onPressed: () async {
+                    setState(() => _isLoading = true);
+                    final auth = Provider.of<AuthProvider>(context, listen: false);
+                    final error = await auth.signInWithGoogle();
+                    
+                    if (error != null && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(error), backgroundColor: AppColors.dangerRed),
+                      );
+                    }
+                    if (mounted) setState(() => _isLoading = false);
+                  },
+                ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _UsernameField extends StatelessWidget {
+  final TextEditingController controller;
+  const _UsernameField({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return _StyledTextField(
+      controller: controller,
+      label: 'Username',
+      icon: Icons.person,
+      isPassword: false,
     );
   }
 }
@@ -142,24 +234,46 @@ class _StyledTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      obscureText: isPassword,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
-        prefixIcon: Icon(icon, color: AppColors.cyanAccent),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusXl),
-          borderSide: const BorderSide(color: Colors.white24),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            AppColors.dangerRed,   // Merah
+            AppColors.primaryBlue,  // Biru
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusXl),
-          borderSide: const BorderSide(color: AppColors.cyanAccent),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(1.5), // Ketebalan outline gradasi merah-biru
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppSizes.radiusXl - 1.5),
         ),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
+        child: TextField(
+          controller: controller,
+          obscureText: isPassword,
+          style: const TextStyle(color: Colors.black87),
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle: const TextStyle(color: Colors.black54),
+            prefixIcon: Icon(icon, color: AppColors.primaryBlue),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -167,30 +281,95 @@ class _StyledTextField extends StatelessWidget {
 
 class _SubmitButton extends StatelessWidget {
   final bool isLoading;
+  final bool isSignUp;
   final VoidCallback onPressed;
 
-  const _SubmitButton({required this.isLoading, required this.onPressed});
+  const _SubmitButton({
+    required this.isLoading,
+    required this.isSignUp,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: AppSizes.topBarHeight,
+      height: 42.0,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            AppColors.dangerRed,   // Merah
+            AppColors.primaryBlue,  // Biru
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.cyanAccent,
-          foregroundColor: Colors.black,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSizes.radiusXl),
           ),
         ),
         child: isLoading
-            ? const CircularProgressIndicator(color: Colors.black)
-            : const Text(
-                'LOGIN / REGISTER',
-                style: TextStyle(fontWeight: FontWeight.bold),
+            ? const CircularProgressIndicator(color: Colors.white)
+            : Text(
+                isSignUp ? 'REGISTER' : 'LOGIN',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
               ),
+      ),
+    );
+  }
+}
+
+class _GoogleSignInButton extends StatelessWidget {
+  final bool isLoading;
+  final VoidCallback onPressed;
+
+  const _GoogleSignInButton({required this.isLoading, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 42.0,
+      child: OutlinedButton.icon(
+        onPressed: isLoading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Colors.grey.shade300, width: 1.5),
+          foregroundColor: Colors.black87,
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+          ),
+        ),
+        // Menggunakan logo Google asli yang telah diunduh
+        icon: Image.asset(
+          'assets/google_logo.png',
+          height: 24,
+        ),
+        label: const Text(
+          'SIGN IN WITH GOOGLE',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
       ),
     );
   }

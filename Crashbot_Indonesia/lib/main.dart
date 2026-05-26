@@ -10,6 +10,7 @@ import 'package:my_flutter_app/core/constants/app_routes.dart';
 import 'package:my_flutter_app/core/theme/app_theme.dart';
 import 'package:my_flutter_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:my_flutter_app/features/auth/presentation/pages/login_page.dart';
+import 'package:my_flutter_app/features/auth/presentation/pages/splash_page.dart';
 import 'package:my_flutter_app/features/lobby/presentation/pages/lobby_page.dart';
 import 'package:my_flutter_app/features/remote/presentation/providers/control_provider.dart';
 import 'package:my_flutter_app/features/remote/presentation/pages/remote_page.dart';
@@ -51,7 +52,7 @@ class CrashbotApp extends StatelessWidget {
       title: 'Crashbot Indonesia',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      home: const AuthWrapper(),
+      home: const SplashPage(),
       routes: {
         AppRoutes.login: (_) => const LoginPage(),
         AppRoutes.lobby: (_) => const LobbyPage(),

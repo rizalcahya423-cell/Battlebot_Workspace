@@ -51,11 +51,11 @@ class AppSizes {
   static const double rankBadgeSize = 28.0;
 
   // ─── Top Bar ───
-  static const double topBarHeight = 50.0;
+  static const double topBarHeight = 72.0;
 
   // ─── Arena ───
-  static const double arenaWidth = 780.0;
-  static const double arenaHeight = 500.0;
+  static const double arenaWidth = 540.0;
+  static const double arenaHeight = 350.0;
   static const double lobbyButtonWidth = 300.0;
   static const double lobbyButtonHeight = 48.0;
 

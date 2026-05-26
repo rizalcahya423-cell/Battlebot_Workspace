@@ -26,12 +26,7 @@ class LobbySidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: AppSizes.sidebarWidth,
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        border: Border(
-          right: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-        ),
-      ),
+      color: Colors.transparent,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: _menuItems
@@ -91,14 +86,14 @@ class _SidebarItem extends StatelessWidget {
             Icon(
               icon,
               color: isActive ? AppColors.accentBlue : Colors.white38,
-              size: AppSizes.iconXxl,
+              size: 28.0, // Perbesar ukuran ikon sidebar agar lebih menonjol
             ),
             const SizedBox(height: AppSizes.spacingSm),
             Text(
               label,
               style: TextStyle(
                 color: isActive ? Colors.white : Colors.white38,
-                fontSize: AppSizes.fontXs,
+                fontSize: AppSizes.fontSm, // Sedikit sesuaikan ukuran teks
                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
               ),
             ),

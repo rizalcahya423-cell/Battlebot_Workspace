@@ -1,10 +1,14 @@
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Manages authentication state using Firebase Auth.
 /// Listens to auth state changes and notifies listeners accordingly.
 class AuthProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
   User? _user;
 
   AuthProvider() {
@@ -28,22 +32,94 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Attempts to create a new account with email and password.
+  /// Attempts to create a new account with email, password, and username.
+  /// Generates a random Player ID (e.g. CB-XXXXX) and saves the profile to Firestore.
   /// Returns null on success, or an error message string on failure.
-  Future<String?> signUp(String email, String password) async {
+  Future<String?> signUp(String email, String password, String username) async {
     try {
-      await _auth.createUserWithEmailAndPassword(
+      final UserCredential credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      final User? user = credential.user;
+      if (user != null) {
+        // Generate random Player ID: CB-XXXXX (where XXXXX is a 5-digit number from 10000 to 99999)
+        final int randomNum = 10000 + Random().nextInt(90000);
+        final String playerId = 'CB-$randomNum';
+
+        // Save player profile to Firestore
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'email': email,
+          'username': username,
+          'playerId': playerId,
+          'gems': 0,
+          'hasSetUsername': true,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
       return null;
     } on FirebaseAuthException catch (e) {
       return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Attempts to sign in with Google.
+  /// Automatically registers new Google users in Firestore with a random Player ID.
+  /// Returns null on success, or an error message string on failure.
+  Future<String?> signInWithGoogle() async {
+    try {
+      // Trigger the authentication flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        return 'Google Sign-In aborted.';
+      }
+
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // Create a new credential
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Once signed in, return the UserCredential
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        // Check if user already exists in Firestore, if not, create their profile
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (!doc.exists) {
+          final int randomNum = 10000 + Random().nextInt(90000);
+          final String playerId = 'CB-$randomNum';
+
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'uid': user.uid,
+            'email': user.email ?? '',
+            'username': user.displayName ?? 'Player',
+            'playerId': playerId,
+            'gems': 0,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return e.message ?? 'Firebase Auth Error';
+    } catch (e) {
+      return e.toString();
     }
   }
 
   /// Signs out the currently authenticated user.
   Future<void> signOut() async {
+    await _googleSignIn.signOut();
     await _auth.signOut();
   }
 }

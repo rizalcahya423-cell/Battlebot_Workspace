@@ -1,15 +1,20 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:my_flutter_app/core/constants/app_colors.dart';
 import 'package:my_flutter_app/core/constants/app_sizes.dart';
+import 'package:my_flutter_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:my_flutter_app/features/lobby/presentation/widgets/lobby_top_bar.dart';
 import 'package:my_flutter_app/features/lobby/presentation/widgets/lobby_sidebar.dart';
+import 'package:my_flutter_app/features/lobby/presentation/widgets/settings_dialog.dart';
 import 'package:my_flutter_app/features/lobby/presentation/widgets/lobby_center_arena.dart';
 import 'package:my_flutter_app/features/lobby/presentation/widgets/lobby_leaderboard.dart';
 import 'package:my_flutter_app/features/lobby/presentation/widgets/moving_background_painter.dart';
@@ -26,7 +31,6 @@ class LobbyPage extends StatefulWidget {
 
 class _LobbyPageState extends State<LobbyPage> with TickerProviderStateMixin {
   String _selectedTab = 'GUIDE';
-  final int _gems = 79;
 
   // Animations
   late final AnimationController _pulseController;
@@ -58,6 +62,7 @@ class _LobbyPageState extends State<LobbyPage> with TickerProviderStateMixin {
     _initBattery();
     _initConnectivity();
     _initPing();
+    _checkUsernameAndPrompt();
   }
 
   @override
@@ -276,7 +281,6 @@ class _LobbyPageState extends State<LobbyPage> with TickerProviderStateMixin {
       children: [
         const SizedBox(height: AppSizes.spacingSm),
         LobbyTopBar(
-          gems: _gems,
           batteryLevel: _batteryLevel,
           batteryIcon: _batteryIcon,
           batteryColor: AppColors.batteryGreen,
@@ -290,7 +294,13 @@ class _LobbyPageState extends State<LobbyPage> with TickerProviderStateMixin {
             children: [
               LobbySidebar(
                 selectedTab: _selectedTab,
-                onTabChanged: (tab) => setState(() => _selectedTab = tab),
+                onTabChanged: (tab) {
+                  if (tab == 'PENGATURAN') {
+                    SettingsDialog.show(context);
+                  } else {
+                    setState(() => _selectedTab = tab);
+                  }
+                },
               ),
               Expanded(
                 child: LobbyCenterArena(
@@ -303,6 +313,281 @@ class _LobbyPageState extends State<LobbyPage> with TickerProviderStateMixin {
           ),
         ),
       ],
+    );
+  }
+
+  // ─── Username Setup Pop-up Check ───
+
+  Future<void> _checkUsernameAndPrompt() async {
+    // Tunggu render page siap & map context aman
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final user = auth.user;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        final data = doc.data();
+        final hasSet = data?['hasSetUsername'] == true;
+        final currentUsername = data?['username'] as String?;
+
+        if (!hasSet || currentUsername == null || currentUsername.trim().isEmpty || currentUsername == 'Player') {
+          if (mounted) {
+            _showUsernameSetupDialog(user.uid, data?['playerId']);
+          }
+        }
+      } else {
+        if (mounted) {
+          _showUsernameSetupDialog(user.uid, null);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking username setup: $e");
+    }
+  }
+
+  void _showUsernameSetupDialog(String uid, String? existingPlayerId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return PopScope(
+          canPop: false,
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+            child: _UsernameSetupCard(
+              uid: uid,
+              existingPlayerId: existingPlayerId,
+              onSuccess: () => Navigator.pop(dialogContext),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Panel dialog kustomisasi username pertama kali yang non-dismissible & premium.
+class _UsernameSetupCard extends StatefulWidget {
+  final String uid;
+  final String? existingPlayerId;
+  final VoidCallback onSuccess;
+
+  const _UsernameSetupCard({
+    required this.uid,
+    required this.existingPlayerId,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_UsernameSetupCard> createState() => _UsernameSetupCardState();
+}
+
+class _UsernameSetupCardState extends State<_UsernameSetupCard> {
+  final _controller = TextEditingController();
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorMessage = 'Username tidak boleh kosong');
+      return;
+    }
+    if (name.length < 3) {
+      setState(() => _errorMessage = 'Username minimal 3 karakter');
+      return;
+    }
+    if (name.toLowerCase() == 'player') {
+      setState(() => _errorMessage = 'Gunakan nama unik selain "Player"');
+      return;
+    }
+
+    final validCharacters = RegExp(r'^[a-zA-Z0-9 ]+$');
+    if (!validCharacters.hasMatch(name)) {
+      setState(() => _errorMessage = 'Hanya huruf, angka, dan spasi');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final String playerId = widget.existingPlayerId ?? 'CB-${10000 + Random().nextInt(90000)}';
+
+      await FirebaseFirestore.instance.collection('users').doc(widget.uid).set({
+        'username': name,
+        'hasSetUsername': true,
+        'playerId': playerId,
+      }, SetOptions(merge: true));
+
+      widget.onSuccess();
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Gagal menyimpan: ${e.toString()}';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 420),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0E1F),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+        border: Border.all(
+          color: AppColors.accentBlue.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.15),
+            blurRadius: 30,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(AppSizes.spacingXl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Center(
+            child: Icon(
+              Icons.stars,
+              color: AppColors.accentBlue,
+              size: 44,
+            ),
+          ),
+          const SizedBox(height: AppSizes.spacingMd),
+          const Center(
+            child: Text(
+              'SET NICKNAME',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: AppSizes.fontTitle,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSizes.spacingSm),
+          Text(
+            'Username ini bersifat permanen dan tidak dapat diubah lagi. Silakan masukkan nama pemain kamu!',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: AppSizes.fontBase,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: AppSizes.spacingXl),
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  AppColors.dangerRed,
+                  AppColors.primaryBlue,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+            ),
+            padding: const EdgeInsets.all(1.5),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF070B19),
+                borderRadius: BorderRadius.circular(AppSizes.radiusXl - 1.5),
+              ),
+              child: TextField(
+                controller: _controller,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                maxLength: 16,
+                decoration: InputDecoration(
+                  labelText: 'Nama Pemain',
+                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+                  prefixIcon: const Icon(Icons.videogame_asset, color: AppColors.accentBlue),
+                  border: InputBorder.none,
+                  counterText: '',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: AppSizes.spacingMd),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(
+                color: AppColors.dangerRed,
+                fontSize: AppSizes.fontSm,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          const SizedBox(height: AppSizes.spacingXl),
+          Container(
+            height: AppSizes.lobbyButtonHeight - 4,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  AppColors.dangerRed,
+                  AppColors.primaryBlue,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+                ),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text(
+                      'SIMPAN USERNAME',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

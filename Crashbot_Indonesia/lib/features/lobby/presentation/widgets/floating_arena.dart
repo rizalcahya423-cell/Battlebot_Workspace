@@ -85,7 +85,7 @@ class _ArenaGlow extends StatelessWidget {
       builder: (_, __) => Positioned(
         bottom: -10,
         child: Container(
-          width: 520,
+          width: AppSizes.arenaWidth * 0.8,
           height: 24,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppSizes.radiusFull),

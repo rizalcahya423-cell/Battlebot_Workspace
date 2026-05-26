@@ -1,0 +1,366 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'package:my_flutter_app/core/constants/app_colors.dart';
+import 'package:my_flutter_app/core/constants/app_sizes.dart';
+import 'package:my_flutter_app/features/auth/presentation/providers/auth_provider.dart';
+
+/// Full-screen styled dialog for game Settings (Pengaturan).
+/// Contains volume sliders, graphic settings, and the Logout (Keluar) button.
+class SettingsDialog extends StatefulWidget {
+  const SettingsDialog({super.key});
+
+  static Future<void> show(BuildContext context) {
+    return showDialog(
+      context: context,
+      builder: (_) => const SettingsDialog(),
+    );
+  }
+
+  @override
+  State<SettingsDialog> createState() => _SettingsDialogState();
+}
+
+class _SettingsDialogState extends State<SettingsDialog> {
+  double _musicVolume = 0.8;
+  double _sfxVolume = 0.9;
+  String _graphicsQuality = 'HIGH';
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 60,
+        vertical: 24,
+      ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 440),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A0E1F),
+          borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+          border: Border.all(
+            color: AppColors.accentBlue.withValues(alpha: 0.3),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withValues(alpha: 0.15),
+              blurRadius: 40,
+              spreadRadius: 4,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHeader(context),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSizes.spacingXxl),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle('AUDIO'),
+                    const SizedBox(height: AppSizes.spacingMd),
+                    _buildVolumeSlider('Volume Musik', _musicVolume, (val) {
+                      setState(() => _musicVolume = val);
+                    }),
+                    _buildVolumeSlider('Volume SFX', _sfxVolume, (val) {
+                      setState(() => _sfxVolume = val);
+                    }),
+                    const SizedBox(height: AppSizes.spacingXl),
+                    _buildSectionTitle('GRAFIK'),
+                    const SizedBox(height: AppSizes.spacingMd),
+                    _buildGraphicsQualitySelector(),
+                    const SizedBox(height: AppSizes.spacingXxxl),
+                    _buildLogoutSection(context),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.spacingXl),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.settings,
+            color: AppColors.accentBlue,
+            size: AppSizes.iconXxl,
+          ),
+          const SizedBox(width: AppSizes.spacingXl),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'PENGATURAN GAME',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: AppSizes.fontXxl,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.spacingSm),
+                Text(
+                  'Atur preferensi permainan dan akun Anda',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: AppSizes.fontBase,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: const Icon(
+                Icons.close,
+                color: Colors.white54,
+                size: AppSizes.iconMd,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: AppColors.accentBlue.withValues(alpha: 0.9),
+        fontSize: AppSizes.fontLg,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 2,
+      ),
+    );
+  }
+
+  Widget _buildVolumeSlider(
+    String label,
+    double value,
+    ValueChanged<double> onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSizes.spacingSm),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: AppSizes.fontBase,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: AppColors.primaryBlue,
+                inactiveTrackColor: Colors.white10,
+                thumbColor: AppColors.accentBlue,
+                overlayColor: AppColors.accentBlue.withValues(alpha: 0.2),
+              ),
+              child: Slider(
+                value: value,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+          Text(
+            '${(value * 100).toInt()}%',
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: AppSizes.fontBase,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGraphicsQualitySelector() {
+    final qualities = ['LOW', 'MEDIUM', 'HIGH'];
+    return Row(
+      children: [
+        const SizedBox(
+          width: 110,
+          child: Text(
+            'Kualitas Grafik',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: AppSizes.fontBase,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: qualities.map((q) {
+              final isSelected = _graphicsQuality == q;
+              return GestureDetector(
+                onTap: () => setState(() => _graphicsQuality = q),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSizes.spacingLg,
+                    vertical: AppSizes.spacingSm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primaryBlue.withValues(alpha: 0.2)
+                        : Colors.white.withValues(alpha: 0.03),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.accentBlue
+                          : Colors.white.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  child: Text(
+                    q,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.white54,
+                      fontSize: AppSizes.fontSm,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLogoutSection(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSizes.spacingLg),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.02),
+        borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Akun & Autentikasi',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: AppSizes.fontBase,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Keluar dari sesi permainan saat ini',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4),
+                  fontSize: AppSizes.fontSm,
+                ),
+              ),
+            ],
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dangerRed,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              shadowColor: AppColors.dangerRed.withValues(alpha: 0.3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSizes.spacingXl,
+                vertical: AppSizes.spacingLg,
+              ),
+            ),
+            onPressed: () {
+              _showLogoutConfirmation(context);
+            },
+            icon: const Icon(Icons.logout, size: AppSizes.iconMd),
+            label: const Text(
+              'KELUAR',
+              style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSizes.spacingXl),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        title: const Text(
+          'Keluar Akun',
+          style: TextStyle(color: AppColors.accentBlue, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Apakah Anda yakin ingin keluar dari akun?',
+          style: TextStyle(color: Colors.white54),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext), // Tutup dialog konfirmasi
+            child: const Text('Batal', style: TextStyle(color: Colors.white38)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dangerRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext); // Tutup dialog konfirmasi
+              Navigator.pop(context); // Tutup SettingsDialog
+              Provider.of<AuthProvider>(context, listen: false).signOut();
+            },
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
